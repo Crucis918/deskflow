@@ -31,10 +31,10 @@ Q_SIGNALS:
   void clearSettingsRequested();
 
 private:
-  void processMessage(QLocalSocket *clientSocket, const QString &message) override;
+  void processCommand(QLocalSocket *clientSocket, const QString &command, const QStringList &parts) override;
   void processLogLevel(QLocalSocket *&clientSocket, const QStringList &messageParts);
   void processElevate(QLocalSocket *&clientSocket, const QStringList &messageParts);
-  void processCommand(QLocalSocket *&clientSocket, const QStringList &messageParts);
+  void processCommandMessage(QLocalSocket *&clientSocket, const QStringList &messageParts);
 
 private:
   const QString m_logFilename;
