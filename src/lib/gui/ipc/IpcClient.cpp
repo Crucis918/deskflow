@@ -6,6 +6,8 @@
 
 #include "IpcClient.h"
 
+#include "common/VersionInfo.h"
+
 #include <QDebug>
 #include <QLocalSocket>
 #include <QTimer>
@@ -67,8 +69,9 @@ void IpcClient::attemptConnection()
   connect(
       m_socket, &QLocalSocket::connected, this,
       [this] {
-        m_socket->write("hello\n");
-        qDebug() << "ipc client sent hello";
+        const auto versionId = QStringLiteral("%1+%2").arg(kVersion, kVersionGitSha);
+        m_socket->write(QString("hello=%1\n").arg(versionId).toUtf8());
+        qDebug() << "ipc client sent hello with version:" << versionId;
       },
       Qt::SingleShotConnection
   );
@@ -141,11 +144,22 @@ void IpcClient::handleReadyRead()
       continue;
     }
 
-    if (m_state == State::Connecting && parts[0] == "hello") {
-      m_state = State::Connected;
-      qDebug() << "ipc client connected";
-      Q_EMIT connected();
-      continue;
+    if (m_state == State::Connecting) {
+      if (parts[0] == "hello") {
+        const auto versionId = QStringLiteral("%1+%2").arg(kVersion, kVersionGitSha);
+        const auto serverVersion = parts.size() >= 2 ? parts[1] : QString();
+        if (serverVersion != versionId) {
+          qCritical() << "ipc version mismatch (client:" << versionId << "server:" << serverVersion << ")";
+          disconnectFromServer();
+          Q_EMIT connectionFailed();
+          continue;
+        }
+
+        m_state = State::Connected;
+        qDebug() << "ipc client connected";
+        Q_EMIT connected();
+        continue;
+      }
     }
 
     processCommand(parts[0], parts);

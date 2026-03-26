@@ -99,7 +99,7 @@ QString CoreProcess::wrapIpv6(const QString &address)
 // CoreProcess
 //
 
-CoreProcess::CoreProcess(const IServerConfig &serverConfig)
+CoreProcess::CoreProcess(const ServerConfig &serverConfig)
     : m_serverConfig(serverConfig),
       m_daemonIpcClient{new ipc::DaemonIpcClient(this)}
 {
@@ -416,7 +416,7 @@ void CoreProcess::stop(std::optional<ProcessMode> processModeOption)
 
   if (m_coreIpcClient) {
     m_coreIpcClient->disconnectFromServer();
-    delete m_coreIpcClient;
+    m_coreIpcClient->deleteLater();
     m_coreIpcClient = nullptr;
   }
 
@@ -534,6 +534,22 @@ void CoreProcess::onCoreIpcMessageReceived(const QString &command, const QString
       m_secureSocketVersion = args;
       Q_EMIT securityLevelChanged(args);
     }
+  } else if (command == "unrecognisedClient") {
+    Q_EMIT unrecognisedClient(args);
+  } else if (command == "connectionRefused") {
+    const auto metaEnum = QMetaEnum::fromType<deskflow::core::ConnectionRefusal>();
+    bool ok = false;
+    const auto reason =
+        static_cast<deskflow::core::ConnectionRefusal>(metaEnum.keyToValue(args.toUtf8().constData(), &ok));
+    if (ok) {
+      Q_EMIT connectionRefused(reason);
+    } else {
+      qWarning("core ipc got unknown connection refusal: %s", args.toUtf8().constData());
+    }
+  } else if (command == "retryIn") {
+    Q_EMIT retryIn(args.toInt());
+  } else if (command == "peerFingerprint") {
+    Q_EMIT peerFingerprint(args);
   }
 }
 
@@ -544,23 +560,6 @@ void CoreProcess::checkLogLine(const QString &line)
 #ifdef Q_OS_MACOS
   checkOSXNotification(line);
 #endif
-}
-
-bool CoreProcess::checkSecureSocket(const QString &line)
-{
-  static const QString tlsCheckString = "network encryption protocol: ";
-  const auto index = line.indexOf(tlsCheckString, 0, Qt::CaseInsensitive);
-  if (index == -1) {
-    return false;
-  }
-
-  Q_EMIT secureSocket(true);
-  if (const auto ssv = line.mid(index + tlsCheckString.size()); ssv != m_secureSocketVersion) {
-    m_secureSocketVersion = ssv;
-    Q_EMIT securityLevelChanged(ssv);
-  }
-
-  return true;
 }
 
 #ifdef Q_OS_MACOS
