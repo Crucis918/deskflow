@@ -45,9 +45,10 @@ App *createApp(CoreArgParser &parser, EventQueue &events, const QString &process
 int main(int argc, char **argv)
 {
 #if defined(Q_OS_WIN)
-  // HACK to make sure settings gets the correct qApp path
-  QCoreApplication m(argc, argv);
-  m.deleteLater();
+  {
+    // HACK to make sure settings gets the correct qApp path
+    QCoreApplication m(argc, argv);
+  }
 
   ArchMiscWindows::setInstanceWin32(GetModuleHandle(nullptr));
 #endif
