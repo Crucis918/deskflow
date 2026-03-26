@@ -23,6 +23,7 @@ public:
   ~IpcServer() override;
 
   void listen();
+  void broadcastCommand(const QString &command, const QString &args = "");
 
 Q_SIGNALS:
   void logLevelChanged(const QString &logLevel);
@@ -55,6 +56,7 @@ private:
   QLocalServer *m_server;
   QSet<QLocalSocket *> m_clients;
   QString m_serverName;
+  QStringList m_pendingMessages;
 };
 
 } // namespace deskflow::core::ipc

@@ -13,14 +13,21 @@
 
 namespace deskflow::core::ipc {
 
+static CoreIpcServer *s_instance = nullptr;
+
 CoreIpcServer::CoreIpcServer(QObject *parent) : IpcServer(parent, kCoreIpcName)
 {
-  // do nothing
+  assert(s_instance == nullptr);
+  s_instance = this;
 }
 
-void CoreIpcServer::processCommand(
-    QLocalSocket *clientSocket, const QString &command, const QStringList &parts
-)
+CoreIpcServer &CoreIpcServer::instance()
+{
+  assert(s_instance != nullptr);
+  return *s_instance;
+}
+
+void CoreIpcServer::processCommand(QLocalSocket *clientSocket, const QString &command, const QStringList &parts)
 {
   Q_UNUSED(clientSocket);
   Q_UNUSED(parts);

@@ -22,7 +22,7 @@ namespace deskflow::gui {
 namespace ipc {
 class CoreIpcClient;
 class DaemonIpcClient;
-}
+} // namespace ipc
 
 class CoreProcess : public QObject
 {
@@ -89,12 +89,14 @@ Q_SIGNALS:
   void processStateChanged(deskflow::core::ProcessState state);
   void secureSocket(bool enabled);
   void daemonIpcClientConnectionFailed();
+  void connectedClientsChanged(const QStringList &clients);
   void securityLevelChanged(QString securityLevel);
 
 private Q_SLOTS:
   void onProcessFinished(int exitCode, QProcess::ExitStatus);
   void onProcessReadyReadStandardOutput();
   void onProcessReadyReadStandardError();
+  void onCoreIpcMessageReceived(const QString &command, const QString &args);
   void daemonIpcClientConnected();
 
 private:
@@ -109,7 +111,7 @@ private:
   bool checkSecureSocket(const QString &line);
   void handleLogLines(const QString &text);
   QString correctedAddress(const QString &address) const;
-  QString requestDaemonLogPath();
+  void setupDaemonLogTail(const QString &logPath);
   static QString makeQuotedArgs(const QString &app, const QStringList &args);
   static QString processModeToString(const Settings::ProcessMode mode);
   static QString processStateToString(const CoreProcess::ProcessState state);
@@ -128,7 +130,6 @@ private:
   QString m_secureSocketVersion;
   std::optional<ProcessMode> m_lastProcessMode = std::nullopt;
   QTimer m_retryTimer;
-  int m_connections = 0;
   deskflow::gui::ipc::CoreIpcClient *m_coreIpcClient = nullptr;
   deskflow::gui::ipc::DaemonIpcClient *m_daemonIpcClient = nullptr;
   FileTail *m_daemonFileTail = nullptr;

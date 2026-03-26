@@ -118,6 +118,14 @@ void IpcServer::processMessage(QLocalSocket *clientSocket, const QString &messag
   if (command == kHelloMessage) {
     LOG_DEBUG("ipc server got hello message, sending hello back");
     writeToClientSocket(clientSocket, kHelloMessage);
+
+    // Replay messages that were queued before any clients connected.
+    LOG_DEBUG1("ipc server replaying %d pending messages", m_pendingMessages.size());
+    for (const auto &pending : m_pendingMessages) {
+      LOG_DEBUG1("ipc server replaying: %s", pending.toUtf8().constData());
+      writeToClientSocket(clientSocket, pending);
+    }
+    m_pendingMessages.clear();
   } else if (command == kNoopMessage) {
     LOG_DEBUG("ipc server got noop message");
     writeToClientSocket(clientSocket, kAckMessage);
@@ -126,6 +134,23 @@ void IpcServer::processMessage(QLocalSocket *clientSocket, const QString &messag
   }
 
   clientSocket->flush();
+}
+
+void IpcServer::broadcastCommand(const QString &command, const QString &args)
+{
+  const auto message = args.isEmpty() ? command : command + "=" + args;
+
+  if (m_clients.isEmpty()) {
+    LOG_DEBUG1("ipc server has no clients, message queued: %s", message.toUtf8().constData());
+    m_pendingMessages.append(message);
+    return;
+  }
+
+  LOG_DEBUG1("ipc server broadcasting message to %d clients: %s", m_clients.size(), message.toUtf8().constData());
+  for (auto *client : m_clients) {
+    writeToClientSocket(client, message);
+    client->flush();
+  }
 }
 
 void IpcServer::writeToClientSocket(QLocalSocket *&clientSocket, const QString &message) const
