@@ -17,10 +17,11 @@ namespace deskflow::gui::ipc {
 const auto kTimeout = 1000;
 const auto kRetryLimit = 3;
 
-IpcClient::IpcClient(QObject *parent, const QString &socketName)
+IpcClient::IpcClient(QObject *parent, const QString &socketName, const QString &typeName)
     : QObject(parent),
       m_socket{new QLocalSocket(this)},
-      m_socketName(socketName) // NOSONAR - Qt memory
+      m_socketName(socketName), // NOSONAR - Qt memory
+      m_typeName(typeName)
 {
   connect(m_socket, &QLocalSocket::disconnected, this, &IpcClient::handleDisconnected);
   connect(m_socket, &QLocalSocket::errorOccurred, this, &IpcClient::handleErrorOccurred);
@@ -30,17 +31,17 @@ IpcClient::IpcClient(QObject *parent, const QString &socketName)
 void IpcClient::connectToServer()
 {
   if (m_state == State::Connecting) {
-    qWarning() << "ipc client already connecting to server";
+    qWarning().noquote() << m_typeName << "ipc client already connecting to server";
     return;
   }
 
   if (m_state != State::Unconnected) {
-    qDebug() << "ipc client not in unconnected state, disconnecting";
+    qDebug().noquote() << m_typeName << "ipc client not in unconnected state, disconnecting";
     disconnectFromServer();
   }
 
   if (m_socket->state() != QLocalSocket::UnconnectedState) {
-    qWarning() << "ipc client socket not in unconnected state, disconnecting";
+    qWarning().noquote() << m_typeName << "ipc client socket not in unconnected state, disconnecting";
     disconnectFromServer();
   }
 
@@ -51,16 +52,16 @@ void IpcClient::connectToServer()
 void IpcClient::attemptConnection()
 {
   if (m_retryCount >= kRetryLimit) {
-    qWarning() << "ipc client failed to connect after" << kRetryLimit << "attempts";
+    qWarning().noquote() << m_typeName << "ipc client failed to connect after" << kRetryLimit << "attempts";
     m_state = State::Unconnected;
     Q_EMIT connectionFailed();
     return;
   }
 
   if (m_retryCount == 0) {
-    qDebug() << "ipc client connecting to server:" << m_socketName;
+    qDebug().noquote() << m_typeName << "ipc client connecting to server:" << m_socketName;
   } else {
-    qDebug() << "ipc client retrying connection, attempt:" << m_retryCount + 1;
+    qDebug().noquote() << m_typeName << "ipc client retrying connection, attempt:" << m_retryCount + 1;
   }
 
   m_state = State::Connecting;
@@ -71,7 +72,7 @@ void IpcClient::attemptConnection()
       [this] {
         const auto versionId = QStringLiteral("%1+%2").arg(kVersion, kVersionGitSha);
         m_socket->write(QString("hello=%1\n").arg(versionId).toUtf8());
-        qDebug() << "ipc client sent hello with version:" << versionId;
+        qDebug().noquote() << m_typeName << "ipc client sent hello with version:" << versionId;
       },
       Qt::SingleShotConnection
   );
@@ -79,7 +80,7 @@ void IpcClient::attemptConnection()
   connect(
       m_socket, &QLocalSocket::errorOccurred, this,
       [this] {
-        qWarning() << "ipc client failed to connect:" << m_socket->errorString();
+        qWarning().noquote() << m_typeName << "ipc client failed to connect:" << m_socket->errorString();
         m_socket->disconnectFromServer();
         m_state = State::Unconnected;
         QTimer::singleShot(0, this, &IpcClient::attemptConnection);
@@ -93,7 +94,7 @@ void IpcClient::attemptConnection()
 void IpcClient::disconnectFromServer()
 {
   m_state = State::Disconnecting;
-  qDebug() << "ipc client disconnecting from server";
+  qDebug().noquote() << m_typeName << "ipc client disconnecting from server";
   m_socket->disconnectFromServer();
   m_state = State::Unconnected;
 }
@@ -104,7 +105,7 @@ void IpcClient::handleDisconnected()
     return;
   }
 
-  qDebug() << "ipc client disconnected from server";
+  qDebug().noquote() << m_typeName << "ipc client disconnected from server";
   const auto wasConnected = m_state == State::Connected;
   m_state = State::Unconnected;
 
@@ -119,7 +120,7 @@ void IpcClient::handleErrorOccurred()
     return;
   }
 
-  qWarning() << "ipc client error:" << m_socket->errorString();
+  qWarning().noquote() << m_typeName << "ipc client error:" << m_socket->errorString();
 
   if (m_state == State::Connected) {
     disconnectFromServer();
@@ -137,10 +138,10 @@ void IpcClient::handleReadyRead()
     const auto message = QString::fromUtf8(data.left(index));
     data.remove(0, index + 1);
 
-    qDebug("ipc client message: %s", message.toUtf8().constData());
+    qDebug().noquote() << m_typeName << "ipc client message:" << message;
     const auto parts = message.split('=');
     if (parts.isEmpty()) {
-      qWarning("ipc client got invalid message: %s", message.toUtf8().constData());
+      qWarning().noquote() << m_typeName << "ipc client got invalid message:" << message;
       continue;
     }
 
@@ -149,14 +150,15 @@ void IpcClient::handleReadyRead()
         const auto versionId = QStringLiteral("%1+%2").arg(kVersion, kVersionGitSha);
         const auto serverVersion = parts.size() >= 2 ? parts[1] : QString();
         if (serverVersion != versionId) {
-          qCritical() << "ipc version mismatch (client:" << versionId << "server:" << serverVersion << ")";
+          qCritical().noquote() << m_typeName << "ipc version mismatch (client:" << versionId
+                                << "server:" << serverVersion << ")";
           disconnectFromServer();
           Q_EMIT connectionFailed();
           continue;
         }
 
         m_state = State::Connected;
-        qDebug() << "ipc client connected";
+        qDebug().noquote() << m_typeName << "ipc client connected";
         Q_EMIT connected();
         continue;
       }
@@ -173,12 +175,12 @@ void IpcClient::handleReadyRead()
 void IpcClient::sendMessage(const QString &message)
 {
   if (m_state != State::Connected) {
-    qWarning() << "cannot send command, ipc client not connected";
+    qWarning().noquote() << m_typeName << "cannot send command, ipc client not connected";
     return;
   }
 
   m_socket->write(message.toUtf8() + "\n");
-  qDebug() << "ipc client sent message:" << message;
+  qDebug().noquote() << m_typeName << "ipc client sent message:" << message;
 }
 
 } // namespace deskflow::gui::ipc
