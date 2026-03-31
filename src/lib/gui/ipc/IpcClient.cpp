@@ -146,6 +146,14 @@ void IpcClient::handleReadyRead()
     }
 
     if (m_state == State::Connecting) {
+      if (parts[0] == "error") {
+        const auto detail = parts.size() >= 2 ? parts[1] : QString("unknown");
+        qCritical().noquote() << m_typeName << "ipc server rejected connection:" << detail;
+        disconnectFromServer();
+        Q_EMIT connectionFailed();
+        continue;
+      }
+
       if (parts[0] == "hello") {
         const auto versionId = QStringLiteral("%1+%2").arg(kVersion, kVersionGitSha);
         const auto serverVersion = parts.size() >= 2 ? parts[1] : QString();
